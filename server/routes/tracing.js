@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { aiUsageSummary, getTask, listAiCalls, listTaskEvents, organizationExists, recentTaskTraces } from '../db.js';
+import { aiUsageSummary, getTask, listAiCalls, listTaskEvents, organizationExists, recentTaskTraces, stats, tracingDailySeries } from '../db.js';
 import { inOrg } from '../org-context.js';
 
 const router = Router();
@@ -7,6 +7,7 @@ const router = Router();
 router.use((req, res, next) => {
   if (req.role === 'superadmin') {
     const orgId = typeof req.query.orgId === 'string' ? req.query.orgId : '';
+    if (!orgId || orgId === 'all') return next();
     if (!orgId) return res.status(400).json({ error: '请选择要查看的组织' });
     if (!organizationExists(orgId)) return res.status(404).json({ error: '组织不存在' });
     return inOrg(orgId, next);
@@ -24,14 +25,14 @@ const sinceTs = days => Date.now() - Math.max(1, Math.min(90, Number(days) || 7)
 router.get('/tracing/summary', (req, res) => {
   const days = Math.max(1, Math.min(90, Number(req.query.days) || 7));
   const summary = aiUsageSummary(sinceTs(days));
-  const traces = recentTaskTraces(50);
+  const taskStats = stats(sinceTs(days));
   const taskTotals = {
-    tasks: traces.length,
-    done: traces.filter(task => task.status === 'done').length,
-    failed: traces.filter(task => task.status === 'failed').length,
-    running: traces.filter(task => task.status === 'running' || task.status === 'queued').length,
+    tasks: taskStats.total,
+    done: taskStats.done,
+    failed: taskStats.failed,
+    running: taskStats.active,
   };
-  res.json({ days, ...summary, taskTotals });
+  res.json({ days, ...summary, taskTotals, series: tracingDailySeries(sinceTs(days)) });
 });
 
 /** 最近的模型调用明细 */
@@ -45,7 +46,18 @@ router.get('/tracing/calls', (req, res) => {
 /** 任务列表（带事件数 / 最后一个事件） */
 router.get('/tracing/tasks', (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  res.json({ items: recentTaskTraces(limit) });
+  let cursor = null;
+  if (req.query.cursor) {
+    try {
+      cursor = JSON.parse(Buffer.from(String(req.query.cursor), 'base64url').toString('utf8'));
+      if (!Number.isFinite(cursor?.at) || typeof cursor?.id !== 'string') throw new Error();
+    } catch { return res.status(400).json({ error: '分页游标无效' }); }
+  }
+  const items = recentTaskTraces(limit + 1, cursor);
+  const hasMore = items.length > limit;
+  if (hasMore) items.pop();
+  const last = items.at(-1);
+  return res.json({ items, nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ at: last.createdAt, id: last.id })).toString('base64url') : null });
 });
 
 /** 单个任务的时间线：任务本体 + 事件流 + 相关模型调用 */

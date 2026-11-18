@@ -94,7 +94,7 @@ export const api = {
   // 调用追踪 / Tracing
   tracingSummary: (days = 7, orgId) => request(`/tracing/summary?days=${days}${orgId ? `&orgId=${encodeURIComponent(orgId)}` : ''}`),
   tracingCalls: (limit = 60, orgId) => request(`/tracing/calls?limit=${limit}${orgId ? `&orgId=${encodeURIComponent(orgId)}` : ''}`),
-  tracingTasks: (limit = 20, orgId) => request(`/tracing/tasks?limit=${limit}${orgId ? `&orgId=${encodeURIComponent(orgId)}` : ''}`),
+  tracingTasks: (limit = 20, orgId, cursor) => request(`/tracing/tasks?limit=${limit}${orgId ? `&orgId=${encodeURIComponent(orgId)}` : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
   tracingTask: (id, orgId) => request(`/tracing/tasks/${id}${orgId ? `?orgId=${encodeURIComponent(orgId)}` : ''}`),
 
   // 画布流水线：剧本拆解（含时间戳/角色）+ 多段拼接

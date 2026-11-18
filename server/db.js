@@ -286,16 +286,31 @@ export function listTasks({ status, projectId, limit = 20, offset = 0 } = {}) {
   return { items: rows.map(toTask), total: total.n };
 }
 
-export function stats() {
+export function stats(sinceTs = 0) {
   const row = db.prepare(`
     SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
       SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) AS active
-    FROM tasks WHERE (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
-  `).get(scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
+    FROM tasks WHERE created_at >= ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
+  `).get(sinceTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
   return { total: row.total || 0, done: row.done || 0, failed: row.failed || 0, active: row.active || 0 };
+}
+
+export function tracingDailySeries(fromTs) {
+  const taskRows = db.prepare(`SELECT strftime('%Y-%m-%d', created_at/1000, 'unixepoch', 'localtime') AS day,
+    COUNT(*) AS tasks, SUM(status='done') AS done, SUM(status='failed') AS failed
+    FROM tasks WHERE created_at>=? AND (? IS NULL OR org_id=?) AND (? IS NULL OR created_by=?) GROUP BY day`)
+    .all(fromTs, scoped(), scoped(), userOnly()?currentUserId():null, userOnly()?currentUserId():null);
+  const callRows = db.prepare(`SELECT strftime('%Y-%m-%d', created_at/1000, 'unixepoch', 'localtime') AS day,
+    COUNT(*) AS calls, SUM(total_tokens) AS tokens, SUM(cost_cny) AS cost, AVG(latency_ms) AS latency
+    FROM ai_calls WHERE created_at>=? AND (? IS NULL OR org_id=?) AND (? IS NULL OR created_by=?) GROUP BY day`)
+    .all(fromTs, scoped(), scoped(), userOnly()?currentUserId():null, userOnly()?currentUserId():null);
+  const series = new Map();
+  for (const row of taskRows) series.set(row.day, { day:row.day,tasks:row.tasks||0,done:row.done||0,failed:row.failed||0,calls:0,tokens:0,cost:0,latency:0 });
+  for (const row of callRows) series.set(row.day, { ...(series.get(row.day)||{day:row.day,tasks:0,done:0,failed:0}),calls:row.calls||0,tokens:row.tokens||0,cost:Number(row.cost||0),latency:Math.round(row.latency||0) });
+  return [...series.values()].sort((a,b)=>a.day.localeCompare(b.day));
 }
 
 /* ===== 通用文档（kind: scripts / projects / canvases / breakdowns / messages） ===== */
@@ -503,13 +518,17 @@ export function aiUsageSummary(fromTs) {
   };
 }
 
-export function recentTaskTraces(limit = 20) {
+export function recentTaskTraces(limit = 20, cursor = null) {
   return db.prepare(`
-    SELECT t.*,
+    SELECT t.*,o.name AS org_name,u.email AS created_by_email,
            (SELECT COUNT(*) FROM task_events e WHERE e.task_id = t.id) AS event_count,
            (SELECT event FROM task_events e WHERE e.task_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_event
-    FROM tasks t WHERE (? IS NULL OR t.org_id = ?) AND (? IS NULL OR t.created_by = ?) ORDER BY t.created_at DESC LIMIT ?
-  `).all(scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null, limit).map(task => ({
+    FROM tasks t LEFT JOIN orgs o ON o.id=t.org_id LEFT JOIN users u ON u.id=t.created_by
+    WHERE (? IS NULL OR t.org_id = ?) AND (? IS NULL OR t.created_by = ?)
+      AND (? IS NULL OR t.created_at < ? OR (t.created_at = ? AND t.id < ?))
+    ORDER BY t.created_at DESC,t.id DESC LIMIT ?
+  `).all(scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null,
+    cursor?.at ?? null, cursor?.at ?? null, cursor?.at ?? null, cursor?.id ?? null, limit).map(task => ({
     id: task.id,
     type: task.type,
     status: task.status,
@@ -524,6 +543,8 @@ export function recentTaskTraces(limit = 20) {
     eventCount: task.event_count,
     lastEvent: task.last_event,
     createdAt: task.created_at,
+    organization: task.org_name,
+    createdBy: task.created_by_email,
   }));
 }
 // 同一条任务是否已经记过一次成功的媒体成本（重试续传时避免重复记账）
@@ -613,8 +634,9 @@ export function platformOverview() {
     (SELECT COUNT(*) FROM tasks t WHERE t.org_id = o.id) AS task_count,
     (SELECT COALESCE(SUM(a.total_tokens), 0) FROM ai_calls a WHERE a.org_id = o.id AND a.created_at >= ?) AS month_tokens,
     (SELECT COALESCE(SUM(g.amount), 0) FROM org_quota_grants g WHERE g.org_id=o.id AND g.period=?) AS quota_granted,
-    (SELECT COALESCE(SUM(q.amount), 0) FROM quota_task_usage q WHERE q.org_id=o.id AND q.period=? AND q.status='settled') AS quota_used
-    FROM orgs o WHERE o.id != 'bootstrap' ORDER BY o.created_at DESC`).all(monthStart.getTime(), period, period);
+    (SELECT COALESCE(SUM(q.amount), 0) FROM quota_task_usage q WHERE q.org_id=o.id AND q.period=? AND q.status='settled') AS quota_used,
+    (SELECT COALESCE(SUM(q.amount), 0) FROM quota_task_usage q WHERE q.org_id=o.id AND q.period=? AND q.status='reserved') AS quota_reserved
+    FROM orgs o WHERE o.id != 'bootstrap' ORDER BY o.created_at DESC`).all(monthStart.getTime(), period, period, period);
   const totals = db.prepare(`SELECT
     (SELECT COUNT(*) FROM orgs WHERE id != 'bootstrap') AS organizations,
     (SELECT COUNT(*) FROM users) AS users,
@@ -626,7 +648,7 @@ export function platformOverview() {
     (SELECT COALESCE(SUM(amount),0) FROM org_quota_grants WHERE period=?) AS quota_granted,
     (SELECT COALESCE(SUM(amount),0) FROM quota_task_usage WHERE period=? AND status='settled') AS quota_used`).get(monthStart.getTime(), period, period);
   for (const org of organizations) {
-    org.quota_remaining = org.quota_granted - org.quota_used;
+    org.quota_remaining = Math.max(0, org.quota_granted - org.quota_used - org.quota_reserved);
   }
   const auditLogs = db.prepare(`SELECT l.id, l.action, l.target, l.created_at, u.email AS actor_email
     FROM org_audit_logs l LEFT JOIN users u ON u.id = l.actor_user_id

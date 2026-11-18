@@ -84,32 +84,37 @@ const readTheme = () => {
 document.documentElement.dataset.theme = readTheme();
 
 // 每个 tab 一个 URL：直接用浏览器地址栏、前进后退、刷新都能保持
+// 工作台统一挂在 /app 下；/admin、/login、/invite 不属于工作台，保持独立
+const APP_HOME = '/app/dashboard';
 const TAB_ROUTES = {
-  首页: '/',
-  创作: '/create',
-  成片: '/videos',
-  智能体: '/agents',
-  画布: '/canvas',
-  剧本: '/scripts',
-  拆解: '/breakdown',
-  资产: '/assets',
-  项目: '/projects',
-  数据: '/data',
-  分发: '/distribute',
+  首页: APP_HOME,
+  创作: '/app/create',
+  成片: '/app/videos',
+  智能体: '/app/agents',
+  画布: '/app/canvas',
+  剧本: '/app/scripts',
+  拆解: '/app/breakdown',
+  资产: '/app/assets',
+  项目: '/app/projects',
+  数据: '/app/data',
+  分发: '/app/distribute',
   管理: '/admin',
   登录: '/login',
   邀请: '/invite',
 };
+const ADMIN_PATHS = { '/admin/overview': '平台概览', '/admin/organizations': '组织管理', '/admin/users': '用户与权限', '/admin/usage': '平台用量', '/admin/tracing': '调用追踪', '/admin/audit': '操作审计' };
 
 const normalizePath = path => (path.replace(/\/+$/, '') || '/');
 
 const tabFromPath = () => {
   const path = normalizePath(window.location.pathname);
+  if (Object.hasOwn(ADMIN_PATHS, path)) return '管理';
+  if (path === '/platform/organizations' || path.startsWith('/platform/organizations/')) return '管理';
   const found = Object.entries(TAB_ROUTES).find(([, route]) => route === path);
   return found ? found[0] : '首页';
 };
 
-const pathForTab = tab => TAB_ROUTES[tab] || '/';
+const pathForTab = tab => TAB_ROUTES[tab] || APP_HOME;
 
 // 精致祥云 SVG 图标
 function CloudEmblem() {
@@ -260,7 +265,7 @@ function App() {
       setSession(value);
       if (value.role === 'superadmin' || value.role === 'org.admin') {
         setActiveTab('管理');
-        window.history.replaceState({ tab: '管理' }, '', '/admin');
+        if (!window.location.pathname.startsWith('/admin/') && !window.location.pathname.startsWith('/platform/organizations')) window.history.replaceState({ tab: '管理' }, '', '/admin');
       }
       setSessionReady(true);
     })
@@ -271,8 +276,8 @@ function App() {
     const onPop = () => setActiveTab(tabFromPath());
     window.addEventListener('popstate', onPop);
     // 未知路径归一到首页，不留死链
-    if (!Object.values(TAB_ROUTES).includes(normalizePath(window.location.pathname))) {
-      window.history.replaceState({ tab: '首页' }, '', '/');
+    if (!Object.values(TAB_ROUTES).includes(normalizePath(window.location.pathname)) && !Object.hasOwn(ADMIN_PATHS, normalizePath(window.location.pathname)) && !normalizePath(window.location.pathname).startsWith('/platform/organizations')) {
+      window.history.replaceState({ tab: '首页' }, '', APP_HOME);
     }
     return () => window.removeEventListener('popstate', onPop);
   }, []);

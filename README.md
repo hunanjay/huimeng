@@ -24,22 +24,26 @@ pnpm dev      # 终端 2：前端 http://127.0.0.1:5173
 
 ## 页面与路由
 
-每个 tab 都有独立 URL，用 `history.pushState` 实现（无路由库）：刷新保持当前页、前进后退可用、未知路径自动归一到 `/`。
+每个 tab 都有独立 URL，用 `history.pushState` 实现（无路由库）：刷新保持当前页、前进后退可用、未知路径自动归一到 `/app/dashboard`。
+
+工作台页面统一挂在 `/app` 下；`/admin`（平台/组织管理）、`/login`、`/invite` 不属于工作台，保持独立。
 
 | URL | 页面 |
 | --- | --- |
-| `/` | 首页 |
-| `/create` | 创作 |
-| `/videos` | 成片（详情为 `/videos#video=<任务id>`） |
-| `/agents` | 智能体 |
-| `/canvas` | 画布 |
-| `/scripts` | 剧本 |
-| `/breakdown` | 拆解 |
-| `/assets` | 资产 |
-| `/projects` | 项目 |
-| `/data` | 数据 |
+| `/app/dashboard` | 首页 |
+| `/app/create` | 创作 |
+| `/app/videos` | 成片（详情为 `/app/videos#video=<任务id>`） |
+| `/app/agents` | 智能体 |
+| `/app/canvas` | 画布 |
+| `/app/scripts` | 剧本 |
+| `/app/breakdown` | 拆解 |
+| `/app/assets` | 资产 |
+| `/app/projects` | 项目 |
+| `/app/data` | 数据 |
+| `/app/distribute` | 分发 |
+| `/admin` | 平台 / 组织管理 |
 
-标题会同步成「页面名 · AI绘梦」。部署到静态服务器时记得配置 SPA fallback（`try_files $uri /index.html`），否则直接访问 `/data` 会 404。
+标题会同步成「页面名 · AI绘梦」。部署到静态服务器时记得配置 SPA fallback（`try_files $uri /index.html`），否则直接访问 `/app/data` 会 404。
 
 ## 页面与后端
 
