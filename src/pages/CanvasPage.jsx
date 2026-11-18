@@ -1330,6 +1330,7 @@ function CanvasEditor({ canvas, onUpdateNodes, onExit }) {
         <h1>{canvas.name}</h1>
         <i className="canvas-live" />
         <span>{nodes.length} 个节点 · {edges.length} 条连线 · {running ? `${running} 个生成中` : `${shots} 条产出`}</span>
+        <small className="canvas-interaction-hint">拖动节点移动 · 拖动空白处框选 · Ctrl/⌘ 点击多选</small>
       </div>
       <div className="canvas-top-actions">
         <button type="button" className="canvas-ghost" onClick={() => setShowTemplates(true)}><Layers size={16} />模板</button>
@@ -1373,6 +1374,9 @@ function CanvasEditor({ canvas, onUpdateNodes, onExit }) {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onPaneClick={() => setContextMenu(null)}
+          nodesDraggable
+          elementsSelectable
+          selectNodesOnDrag
           selectionOnDrag
           selectionMode={SelectionMode.Partial}
           panOnDrag={[1]}

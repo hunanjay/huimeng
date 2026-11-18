@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createTask, getTask, getTaskByRunId, listTasks, recordTaskEvent, removeTask, updateTask } from '../db.js';
+import { createTask, getDocument, getTask, getTaskByRunId, listTasks, recordTaskEvent, removeTask, updateTask } from '../db.js';
 import { config } from '../config.js';
 import { providerInfo } from '../providers/index.js';
 
@@ -60,6 +60,8 @@ router.post('/tasks', (req, res) => {
     const existing = getTaskByRunId(idempotentId);
     if (existing) return res.status(200).json(present(existing));
   }
+
+  if (projectId && getDocument(projectId)?.kind !== 'projects') return res.status(404).json({ error: '项目不存在' });
 
   const info = providerInfo();
   const task = createTask({

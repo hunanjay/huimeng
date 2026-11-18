@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from './config.js';
 import { canAccessFile, getSession, stats } from './db.js';
 import { inOrg } from './org-context.js';
+import { inUser } from './user-context.js';
 import { providerFallback, providerInfo } from './providers/index.js';
 import { startPoller } from './poller.js';
 import tasksRouter from './routes/tasks.js';
@@ -60,9 +61,9 @@ app.use('/api', (req, res, next) => {
   if (session.org.status === 'suspended' && session.role !== 'superadmin') return res.status(403).json({ error: '该组织已暂停使用，请联系平台管理员' });
   if (req.path.startsWith('/files/')) {
     const name = decodeURIComponent(req.path.slice('/files/'.length));
-    if (name.includes('/') || name.includes('\\') || !canAccessFile(name, session.org.id)) return res.status(404).json({ error: '文件不存在' });
+    if (name.includes('/') || name.includes('\\') || !canAccessFile(name, session.org.id, session.user.id, session.role)) return res.status(404).json({ error: '文件不存在' });
   }
-  return inOrg(session.org.id, next);
+  return inOrg(session.org.id, () => inUser(session.user.id, session.role, next));
 });
 
 app.get('/api/health', (req, res) => res.json({

@@ -36,6 +36,7 @@ function countScenes(text) {
 
 router.post('/scripts', (req, res) => {
   const { title, source = '原创', text = '', fileName = '', projectId = null } = req.body || {};
+  if (projectId && getDocument(projectId)?.kind !== 'projects') return res.status(404).json({ error: '项目不存在' });
   const content = String(text);
   if (!content.trim() && !fileName) {
     return res.status(400).json({ error: '剧本文本不能为空' });
@@ -153,12 +154,14 @@ router.get('/documents/:kind', requireKind, (req, res) => {
 
 router.post('/documents/:kind', requireKind, (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+  if (body.projectId && getDocument(body.projectId)?.kind !== 'projects') return res.status(404).json({ error: '项目不存在' });
   res.status(201).json(createDocument(req.params.kind, body));
 });
 
 router.patch('/documents/:kind/:id', requireKind, (req, res) => {
   const current = getDocument(req.params.id);
   if (!current || current.kind !== req.params.kind) return res.status(404).json({ error: '记录不存在' });
+  if (req.body?.projectId && getDocument(req.body.projectId)?.kind !== 'projects') return res.status(404).json({ error: '项目不存在' });
   return res.json(patchDocument(req.params.id, req.body || {}));
 });
 

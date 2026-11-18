@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomUUID, randomBytes, scryptSync, createHash, timingSafeEqual } from 'node:crypto';
 import { config } from './config.js';
 import { currentOrgId } from './org-context.js';
+import { currentRole, currentUserId } from './user-context.js';
 
 mkdirSync(config.dataDir, { recursive: true });
 mkdirSync(config.uploadDir, { recursive: true });
@@ -48,7 +49,7 @@ db.exec(`
   const columns = db.prepare('PRAGMA table_info(sessions)').all().map(row => row.name);
   if (!columns.includes('created_at')) db.exec('ALTER TABLE sessions ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0');
 }
-db.exec(`CREATE TABLE IF NOT EXISTS file_owners (path TEXT PRIMARY KEY, org_id TEXT NOT NULL)`);
+db.exec(`CREATE TABLE IF NOT EXISTS file_owners (path TEXT PRIMARY KEY, org_id TEXT NOT NULL, created_by TEXT)`);
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
@@ -131,6 +132,10 @@ for (const table of ['tasks', 'documents', 'ai_calls']) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name);
   if (!columns.includes('org_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'bootstrap'`);
 }
+for (const table of ['documents', 'ai_calls', 'file_owners']) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name);
+  if (!columns.includes('created_by')) db.exec(`ALTER TABLE ${table} ADD COLUMN created_by TEXT`);
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS org_quota_grants (
     id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -163,10 +168,7 @@ const insertStmt = db.prepare(`
   INSERT INTO tasks (id, type, req_key, prompt, params, status, progress, attempts, run_id, project_id, created_at, updated_at, org_id, created_by)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
-const getStmt = db.prepare('SELECT * FROM tasks WHERE id = ? AND (? IS NULL OR org_id = ?)');
-const byRunStmt = db.prepare('SELECT * FROM tasks WHERE run_id = ? AND (? IS NULL OR org_id = ?)');
 const activeStmt = db.prepare("SELECT * FROM tasks WHERE status IN ('queued', 'running') ORDER BY created_at ASC LIMIT 20");
-const deleteStmt = db.prepare('DELETE FROM tasks WHERE id = ?');
 
 const WRITABLE = new Set([
   'status', 'progress', 'attempts', 'remote_task_id', 'result_url',
@@ -174,6 +176,7 @@ const WRITABLE = new Set([
 ]);
 
 const quotaPeriod = () => new Date().toISOString().slice(0, 7);
+const userOnly = () => currentRole() === 'org.user' && currentUserId();
 // shortcut: only image/video generation tasks spend points; meter LLM calls when their quota price is defined.
 const taskQuotaAmount = type => type === 'video' ? 8 : 1;
 const insufficientQuota = message => Object.assign(new Error(message), { status: 402 });
@@ -214,14 +217,30 @@ export function createTask({ type, reqKey, prompt, params, runId, projectId, use
   db.exec('BEGIN IMMEDIATE');
   try {
     reserveTaskQuota(id, orgId, userId, type);
-    insertStmt.run(id, type, reqKey, prompt, JSON.stringify(params || {}), 'queued', 0, 0, runId ? `${orgId}:${runId}` : null, projectId || null, now, now, orgId, userId);
+    insertStmt.run(id, type, reqKey, prompt, JSON.stringify(params || {}), 'queued', 0, 0, runId ? `${orgId}:${userId || 'system'}:${runId}` : null, projectId || null, now, now, orgId, userId);
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   return getTask(id);
 }
 
-export const getTask = id => toTask(getStmt.get(id, scoped(), scoped()));
-export const getTaskByRunId = runId => (runId ? toTask(byRunStmt.get(`${scoped() || 'bootstrap'}:${runId}`, scoped(), scoped())) : null);
+export function getTask(id) {
+  const ownerClause = userOnly() ? ' AND created_by = ?' : '';
+  const args = [id, scoped(), scoped()];
+  if (userOnly()) args.push(currentUserId());
+  return toTask(db.prepare(`SELECT * FROM tasks WHERE id = ? AND (? IS NULL OR org_id = ?)${ownerClause}`).get(...args));
+}
+export function getTaskByRunId(runId) {
+  if (!runId) return null;
+  const ownerClause = userOnly() ? ' AND created_by = ?' : '';
+  const orgId = scoped() || 'bootstrap';
+  const args = [`${orgId}:${currentUserId() || 'system'}:${runId}`, scoped(), scoped()];
+  if (userOnly()) args.push(currentUserId());
+  const current = db.prepare(`SELECT * FROM tasks WHERE run_id = ? AND (? IS NULL OR org_id = ?)${ownerClause}`).get(...args);
+  if (current) return toTask(current);
+  const legacyArgs = [`${orgId}:${runId}`, scoped(), scoped()];
+  if (userOnly()) legacyArgs.push(currentUserId());
+  return toTask(db.prepare(`SELECT * FROM tasks WHERE run_id = ? AND (? IS NULL OR org_id = ?)${ownerClause}`).get(...legacyArgs));
+}
 export const activeTasks = () => activeStmt.all().map(toTask);
 
 export function updateTask(id, patch, actorUserId = null) {
@@ -254,11 +273,13 @@ export function listTasks({ status, projectId, limit = 20, offset = 0 } = {}) {
   if (scoped()) clauses.push('org_id = ?');
   if (status) clauses.push('status = ?');
   if (projectId) clauses.push('project_id = ?');
+  if (userOnly()) clauses.push('created_by = ?');
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const values = [];
   if (scoped()) values.push(scoped());
   if (status) values.push(status);
   if (projectId) values.push(projectId);
+  if (userOnly()) values.push(currentUserId());
   const rows = db.prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
     .all(...values, limit, offset);
   const total = db.prepare(`SELECT COUNT(*) AS n FROM tasks ${where}`).get(...values);
@@ -272,8 +293,8 @@ export function stats() {
       SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
       SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) AS active
-    FROM tasks WHERE (? IS NULL OR org_id = ?)
-  `).get(scoped(), scoped());
+    FROM tasks WHERE (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
+  `).get(scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
   return { total: row.total || 0, done: row.done || 0, failed: row.failed || 0, active: row.active || 0 };
 }
 
@@ -281,23 +302,27 @@ export function stats() {
 
 const docToObject = row => (row ? { id: row.id, kind: row.kind, ...JSON.parse(row.data || '{}'), createdAt: row.created_at, updatedAt: row.updated_at } : null);
 
-const docInsert = db.prepare('INSERT INTO documents (id, kind, data, created_at, updated_at, org_id) VALUES (?, ?, ?, ?, ?, ?)');
-const docGet = db.prepare('SELECT * FROM documents WHERE id = ? AND (? IS NULL OR org_id = ?)');
-const docDelete = db.prepare('DELETE FROM documents WHERE id = ? AND (? IS NULL OR org_id = ?)');
+const docGet = id => {
+  const ownerClause = userOnly() ? ' AND created_by = ?' : '';
+  const args = [id, scoped(), scoped()];
+  if (userOnly()) args.push(currentUserId());
+  return db.prepare(`SELECT * FROM documents WHERE id = ? AND (? IS NULL OR org_id = ?)${ownerClause}`).get(...args);
+};
 
 export function createDocument(kind, data = {}) {
   const id = randomUUID();
   const now = Date.now();
-  docInsert.run(id, kind, JSON.stringify(data), now, now, scoped() || 'bootstrap');
-  return docToObject(docGet.get(id, scoped(), scoped()));
+  db.prepare('INSERT INTO documents (id, kind, data, created_at, updated_at, org_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(id, kind, JSON.stringify(data), now, now, scoped() || 'bootstrap', currentUserId());
+  return docToObject(docGet(id));
 }
 
 export function getDocument(id) {
-  return docToObject(docGet.get(id, scoped(), scoped()));
+  return docToObject(docGet(id));
 }
 
 export function patchDocument(id, patch = {}) {
-  const current = docToObject(docGet.get(id, scoped(), scoped()));
+  const current = docToObject(docGet(id));
   if (!current) return null;
   const { id: _ignored, kind, createdAt, updatedAt, ...rest } = current;
   const next = { ...rest, ...patch };
@@ -306,17 +331,24 @@ export function patchDocument(id, patch = {}) {
 }
 
 export function removeDocument(id) {
-  docDelete.run(id, scoped(), scoped());
+  const ownerClause = userOnly() ? ' AND created_by = ?' : '';
+  const args = [id, scoped(), scoped()];
+  if (userOnly()) args.push(currentUserId());
+  db.prepare(`DELETE FROM documents WHERE id = ? AND (? IS NULL OR org_id = ?)${ownerClause}`).run(...args);
 }
 
 export function listDocuments(kind, limit = 100) {
-  return db.prepare('SELECT * FROM documents WHERE kind = ? AND (? IS NULL OR org_id = ?) ORDER BY updated_at DESC LIMIT ?')
-    .all(kind, scoped(), scoped(), limit)
+  const ownerClause = userOnly() ? ' AND created_by = ?' : '';
+  const args = [kind, scoped(), scoped()];
+  if (userOnly()) args.push(currentUserId());
+  args.push(limit);
+  return db.prepare(`SELECT * FROM documents WHERE kind = ? AND (? IS NULL OR org_id = ?)${ownerClause} ORDER BY updated_at DESC LIMIT ?`)
+    .all(...args)
     .map(docToObject);
 }
 
 export function countDocuments(kind) {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM documents WHERE kind = ? AND (? IS NULL OR org_id = ?)').get(kind, scoped(), scoped());
+  const row = db.prepare('SELECT COUNT(*) AS n FROM documents WHERE kind = ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)').get(kind, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
   return row.n || 0;
 }
 
@@ -333,16 +365,16 @@ export function dailyTaskSeries(days = 30) {
            SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done,
            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
     FROM tasks
-    WHERE created_at >= ? AND (? IS NULL OR org_id = ?)
+    WHERE created_at >= ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
     GROUP BY day
     ORDER BY day ASC
-  `).all(fromTs, scoped(), scoped());
+  `).all(fromTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
 
   const scripts = db.prepare(`
     SELECT strftime('%Y-%m-%d', created_at / 1000, 'unixepoch', 'localtime') AS day, COUNT(*) AS total
-    FROM documents WHERE kind = 'scripts' AND created_at >= ? AND (? IS NULL OR org_id = ?)
+    FROM documents WHERE kind = 'scripts' AND created_at >= ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
     GROUP BY day
-  `).all(fromTs, scoped(), scoped());
+  `).all(fromTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
 
   const series = [];
   for (let i = 0; i < days; i += 1) {
@@ -364,11 +396,12 @@ export function dailyTaskSeries(days = 30) {
 /* ===== 调用记账 / 任务事件（tracing） ===== */
 
 const callInsert = db.prepare(`
-  INSERT INTO ai_calls (id, kind, provider, model, task_id, prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, latency_ms, status, error, meta, created_at, cost_cny, org_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO ai_calls (id, kind, provider, model, task_id, prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, latency_ms, status, error, meta, created_at, cost_cny, org_id, created_by)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const eventInsert = db.prepare('INSERT INTO task_events (id, task_id, event, detail, created_at, org_id) VALUES (?, ?, ?, ?, ?, ?)');
-const taskOrg = taskId => scoped() || db.prepare('SELECT org_id FROM tasks WHERE id = ?').get(taskId)?.org_id || 'bootstrap';
+const taskOwner = taskId => taskId ? db.prepare('SELECT org_id, created_by FROM tasks WHERE id = ?').get(taskId) : null;
+const taskOrg = taskId => scoped() || taskOwner(taskId)?.org_id || 'bootstrap';
 
 export function recordAiCall({
   kind,
@@ -388,7 +421,7 @@ export function recordAiCall({
   callInsert.run(
     randomUUID(), kind, provider, model, taskId,
     promptTokens || 0, completionTokens || 0, totalTokens || 0, reasoningTokens || 0,
-    latencyMs || 0, status, error, meta ? JSON.stringify(meta) : null, Date.now(), costCny || 0, taskOrg(taskId),
+    latencyMs || 0, status, error, meta ? JSON.stringify(meta) : null, Date.now(), costCny || 0, taskOrg(taskId), currentUserId() || taskOwner(taskId)?.created_by || null,
   );
 }
 
@@ -406,6 +439,7 @@ export function listAiCalls({ limit = 60, kind, model } = {}) {
   const where = [];
   const args = [];
   if (scoped()) { where.push('org_id = ?'); args.push(scoped()); }
+  if (userOnly()) { where.push('created_by = ?'); args.push(currentUserId()); }
   if (kind) { where.push('kind = ?'); args.push(kind); }
   if (model) { where.push('model = ?'); args.push(model); }
   const sql = `SELECT * FROM ai_calls ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT ?`;
@@ -438,20 +472,20 @@ export function aiUsageSummary(fromTs) {
            SUM(cost_cny) AS cost,
            SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS errors
     FROM ai_calls WHERE created_at >= ?
-      AND (? IS NULL OR org_id = ?)
-  `).get(fromTs, scoped(), scoped());
+      AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
+  `).get(fromTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
 
   const byModel = db.prepare(`
     SELECT model, COUNT(*) AS calls, SUM(total_tokens) AS tokens, AVG(latency_ms) AS avg_latency, SUM(cost_cny) AS cost
-    FROM ai_calls WHERE created_at >= ? AND (? IS NULL OR org_id = ?)
+    FROM ai_calls WHERE created_at >= ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
     GROUP BY model ORDER BY tokens DESC
-  `).all(fromTs, scoped(), scoped());
+  `).all(fromTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
 
   const byKind = db.prepare(`
     SELECT kind, COUNT(*) AS calls, SUM(total_tokens) AS tokens, AVG(latency_ms) AS avg_latency, SUM(cost_cny) AS cost
-    FROM ai_calls WHERE created_at >= ? AND (? IS NULL OR org_id = ?)
+    FROM ai_calls WHERE created_at >= ? AND (? IS NULL OR org_id = ?) AND (? IS NULL OR created_by = ?)
     GROUP BY kind ORDER BY calls DESC
-  `).all(fromTs, scoped(), scoped());
+  `).all(fromTs, scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null);
 
   return {
     totals: {
@@ -474,8 +508,8 @@ export function recentTaskTraces(limit = 20) {
     SELECT t.*,
            (SELECT COUNT(*) FROM task_events e WHERE e.task_id = t.id) AS event_count,
            (SELECT event FROM task_events e WHERE e.task_id = t.id ORDER BY created_at DESC LIMIT 1) AS last_event
-    FROM tasks t WHERE (? IS NULL OR t.org_id = ?) ORDER BY t.created_at DESC LIMIT ?
-  `).all(scoped(), scoped(), limit).map(task => ({
+    FROM tasks t WHERE (? IS NULL OR t.org_id = ?) AND (? IS NULL OR t.created_by = ?) ORDER BY t.created_at DESC LIMIT ?
+  `).all(scoped(), scoped(), userOnly() ? currentUserId() : null, userOnly() ? currentUserId() : null, limit).map(task => ({
     id: task.id,
     type: task.type,
     status: task.status,
@@ -821,15 +855,20 @@ export function setMemberQuota({ orgId, userId, amount, actorUserId }) {
 }
 
 export function registerFile(path, orgId = scoped() || 'bootstrap') {
-  db.prepare('INSERT OR REPLACE INTO file_owners(path, org_id) VALUES (?, ?)').run(path, orgId);
+  db.prepare('INSERT OR REPLACE INTO file_owners(path, org_id, created_by) VALUES (?, ?, ?)').run(path, orgId, currentUserId());
 }
 
 export function registerTaskFile(taskId, path) {
   const row = db.prepare('SELECT org_id FROM tasks WHERE id = ?').get(taskId);
-  if (row && path) registerFile(path, row.org_id);
+  if (row && path) db.prepare('INSERT OR REPLACE INTO file_owners(path, org_id, created_by) VALUES (?, ?, ?)').run(path, row.org_id, row.created_by);
 }
 
-export function canAccessFile(path, orgId) {
-  return Boolean(db.prepare(`SELECT 1 FROM file_owners WHERE path = ? AND org_id = ?
-    UNION SELECT 1 FROM tasks WHERE local_path = ? AND org_id = ? LIMIT 1`).get(path, orgId, path, orgId));
+export function canAccessFile(path, orgId, userId = currentUserId(), role = currentRole()) {
+  const ownerFilter = role === 'org.user' ? ' AND created_by = ?' : '';
+  const args = [path, orgId];
+  if (role === 'org.user') args.push(userId);
+  args.push(path, orgId);
+  if (role === 'org.user') args.push(userId);
+  return Boolean(db.prepare(`SELECT 1 FROM file_owners WHERE path = ? AND org_id = ?${ownerFilter}
+    UNION SELECT 1 FROM tasks WHERE local_path = ? AND org_id = ?${ownerFilter} LIMIT 1`).get(...args));
 }

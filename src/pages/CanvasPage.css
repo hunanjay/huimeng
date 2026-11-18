@@ -254,6 +254,14 @@
   white-space: nowrap;
 }
 
+.canvas-interaction-hint {
+  padding-left: 10px;
+  border-left: 1px solid #e8e0cf;
+  color: #8490a0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .canvas-top-actions {
   display: flex;
   align-items: center;
@@ -467,11 +475,13 @@
   cursor: grabbing;
 }
 
-.react-flow__node-generation {
+.react-flow__node-generation,
+.react-flow__node-planner {
   cursor: grab;
 }
 
-.react-flow__node-generation.dragging {
+.react-flow__node-generation.dragging,
+.react-flow__node-planner.dragging {
   cursor: grabbing;
 }
 
@@ -1631,6 +1641,7 @@
 
 @media (max-width: 620px) {
   .canvas-title span,
+  .canvas-interaction-hint,
   .canvas-ghost {
     display: none;
   }
