@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Home,
@@ -22,6 +22,7 @@ import {
   Sparkles,
   ArrowRight,
   Palette,
+  Share2,
   Play,
   Film,
   Bot,
@@ -30,6 +31,23 @@ import {
   BarChart3
 } from 'lucide-react';
 import './style.css';
+import TopbarActions from './components/TopbarActions.jsx';
+import VideosPage from './pages/VideosPage.jsx';
+import AgentsPage from './pages/AgentsPage.jsx';
+import CanvasPage from './pages/CanvasPage.jsx';
+import DecomposePage from './pages/DecomposePage.jsx';
+import ScriptsPage from './pages/ScriptsPage.jsx';
+import AssetsPage from './pages/AssetsPage.jsx';
+import ProjectsPage from './pages/ProjectsPage.jsx';
+import DataPage from './pages/DataPage.jsx';
+import CreateWorkbench from './pages/CreateWorkbench.jsx';
+import DistributePage from './pages/DistributePage.jsx';
+import AdminPage from './pages/AdminPage.jsx';
+import SuperadminPage from './pages/SuperadminPage.jsx';
+import AuthPage from './pages/AuthPage.jsx';
+import { api, setToken } from './api.js';
+// 主题覆盖必须最后加载：同优先级下才能盖住各页面自己的配色
+import './theme.css';
 
 const navItems = [
   { icon: Home, label: '首页' },
@@ -42,7 +60,56 @@ const navItems = [
   { icon: ImageIcon, label: '资产' },
   { icon: PanelLeft, label: '项目' },
   { icon: ChartNoAxesColumn, label: '数据' },
+  { icon: Share2, label: '分发' },
 ];
+
+// 四套配色：和 theme.css 里的 [data-theme] 一一对应
+const THEMES = [
+  { key: 'gold', name: '新国风雅金', swatch: 'linear-gradient(135deg,#fffdf8 0 45%,#345971 46%)' },
+  { key: 'ink', name: '夜幕黑紫', swatch: 'linear-gradient(135deg,#232631 0 45%,#7950d5 46%)' },
+  { key: 'aurora', name: '极光淡紫', swatch: 'linear-gradient(135deg,#ffffff 0 45%,#7c4ed0 46%)' },
+  { key: 'jade', name: '青绿山水', swatch: 'linear-gradient(135deg,#f7fbf7 0 45%,#2f6b5a 46%)' },
+];
+
+const readTheme = () => {
+  try {
+    const saved = localStorage.getItem('huimeng_theme');
+    return THEMES.some(item => item.key === saved) ? saved : 'gold';
+  } catch {
+    return 'gold';
+  }
+};
+
+// 在 React 挂载前就写好，避免首屏闪一下默认配色
+document.documentElement.dataset.theme = readTheme();
+
+// 每个 tab 一个 URL：直接用浏览器地址栏、前进后退、刷新都能保持
+const TAB_ROUTES = {
+  首页: '/',
+  创作: '/create',
+  成片: '/videos',
+  智能体: '/agents',
+  画布: '/canvas',
+  剧本: '/scripts',
+  拆解: '/breakdown',
+  资产: '/assets',
+  项目: '/projects',
+  数据: '/data',
+  分发: '/distribute',
+  管理: '/admin',
+  登录: '/login',
+  邀请: '/invite',
+};
+
+const normalizePath = path => (path.replace(/\/+$/, '') || '/');
+
+const tabFromPath = () => {
+  const path = normalizePath(window.location.pathname);
+  const found = Object.entries(TAB_ROUTES).find(([, route]) => route === path);
+  return found ? found[0] : '首页';
+};
+
+const pathForTab = tab => TAB_ROUTES[tab] || '/';
 
 // 精致祥云 SVG 图标
 function CloudEmblem() {
@@ -159,15 +226,89 @@ const featuredWorks = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState('首页');
+  const [activeTab, setActiveTab] = useState(tabFromPath);
+  const [session, setSession] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
   const [promptText, setPromptText] = useState('');
   const [creationMode, setCreationMode] = useState('剧本成片');
+  const [theme, setTheme] = useState(readTheme);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const themeRef = useRef(null);
+
+  // 切 tab = pushState：浏览器前进/后退、刷新、直接贴 URL 都能用
+  const navigate = useCallback(tab => {
+    setActiveTab(tab);
+    const path = pathForTab(tab);
+    const current = normalizePath(window.location.pathname);
+    if (current !== path || window.location.hash) {
+      window.history.pushState({ tab }, '', path);
+    }
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const openProjectPage = (tab, project) => {
+    setSelectedProject(project);
+    navigate(tab);
+  };
+
+  useEffect(() => {
+    let token = '';
+    try { token = localStorage.getItem('huimeng_token') || ''; } catch { /* 隐私模式下按未登录处理 */ }
+    if (!token) { setActiveTab('登录'); if (normalizePath(window.location.pathname) !== '/invite') window.history.replaceState({ tab: '登录' }, '', '/login'); setSessionReady(true); return; }
+    api.session().then(value => {
+      setSession(value);
+      if (value.role === 'superadmin' || value.role === 'org.admin') {
+        setActiveTab('管理');
+        window.history.replaceState({ tab: '管理' }, '', '/admin');
+      }
+      setSessionReady(true);
+    })
+      .catch(() => { setToken(''); setSession(null); setActiveTab('登录'); window.history.replaceState({ tab: '登录' }, '', '/login'); setSessionReady(true); });
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setActiveTab(tabFromPath());
+    window.addEventListener('popstate', onPop);
+    // 未知路径归一到首页，不留死链
+    if (!Object.values(TAB_ROUTES).includes(normalizePath(window.location.pathname))) {
+      window.history.replaceState({ tab: '首页' }, '', '/');
+    }
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    document.title = `${activeTab} · AI绘梦`;
+  }, [activeTab]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem('huimeng_theme', theme);
+    } catch {
+      /* 隐私模式下忽略 */
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (!themeOpen) return undefined;
+    const onDown = event => {
+      if (themeRef.current && !themeRef.current.contains(event.target)) setThemeOpen(false);
+    };
+    const onKey = event => { if (event.key === 'Escape') setThemeOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [themeOpen]);
 
   const inspirationTags = ['悬疑 旧仓库回头', '古风 雨巷对峙', '都市 天台晚霞'];
 
   const handleStartCreation = (textToUse) => {
     const finalVal = typeof textToUse === 'string' ? textToUse : promptText;
-    setActiveTab('创作');
+    navigate('创作');
     if (finalVal.trim()) {
       setCreationMode('分镜出片');
     }
@@ -180,39 +321,36 @@ function App() {
     }
   };
 
+  const isAdmin = session?.role === 'superadmin' || session?.role === 'org.admin';
+  useEffect(() => { if (sessionReady && activeTab === '管理' && !isAdmin) navigate(session ? '首页' : '登录'); }, [sessionReady, activeTab, isAdmin, session, navigate]);
+  useEffect(() => { if (sessionReady && session && activeTab === '登录') navigate(isAdmin ? '管理' : '首页'); }, [sessionReady, session, activeTab, isAdmin, navigate]);
+  if (!sessionReady) return <div className="auth-loading">正在验证登录状态…</div>;
+  if (!session) return <AuthPage onAuthenticated={value => {
+    const role = value.role || value.org?.role || 'org.user';
+    const authenticated = { ...value, role };
+    setSession(authenticated);
+    navigate(role === 'superadmin' || role === 'org.admin' ? '管理' : '首页');
+  }} />;
+  if (activeTab === '登录') return <AuthPage onAuthenticated={value => {
+    const role = value.role || value.org?.role || 'org.user';
+    setSession({ ...value, role });
+    navigate(role === 'superadmin' || role === 'org.admin' ? '管理' : '首页');
+  }} />;
+  const logout = async () => { try { await api.logout(); } catch { /* 本地退出仍应可用 */ } finally { setToken(''); setSession(null); navigate('登录'); } };
+  if (isAdmin && activeTab === '管理') return <div className="app-shell admin-shell"><header className="topbar"><div className="brand"><div className="brand-mark">AI</div><strong>AI绘梦</strong><span className="brand-sub">{session.role === 'superadmin' ? 'SaaS 平台管理' : '组织管理'}</span></div><div className="top-actions"><div className="profile"><div className="avatar"><UserRound size={19}/></div><div><b>{session.user.email}</b><small>{session.role === 'superadmin' ? '平台管理员' : '组织管理员'}</small></div></div><button className="pill" onClick={() => navigate('首页')}>进入创作工作台</button><button className="pill" onClick={logout}>退出登录</button></div></header>{session.role === 'superadmin' ? <SuperadminPage /> : <AdminPage org={session.org} user={session.user} />}</div>;
+
   return (
     <div className="app-shell">
       {/* 顶部全局导航 */}
       <header className="topbar">
-        <div className="brand" onClick={() => setActiveTab('首页')} style={{ cursor: 'pointer' }}>
+        <div className="brand" onClick={() => navigate('首页')} style={{ cursor: 'pointer' }}>
           <div className="brand-mark">AI</div>
           <strong>AI绘梦</strong>
           <span className="brand-sub">漫剧 · 短剧创作平台</span>
+          {selectedProject && <button type="button" className="pill" onClick={event => { event.stopPropagation(); navigate('项目'); }} title="返回项目列表">项目：{selectedProject.name}</button>}
         </div>
 
-        <div className="top-actions">
-          <button className="pill" onClick={() => setActiveTab('成片')}>
-            <Video size={17} /> 成片
-          </button>
-          <button className="round gold-badge" title="灵感特权">
-            <span className="gold-flower">❀</span>
-          </button>
-          <button className="credit" title="可用算力 / 点数">
-            <Wallet size={16} /> <b>0</b>
-          </button>
-          <button className="round" title="通知消息">
-            <Bell size={18} />
-          </button>
-          <div className="profile">
-            <div className="avatar">
-              <UserRound size={19} />
-            </div>
-            <div>
-              <b>罗剑</b>
-              <small>制作成员</small>
-            </div>
-          </div>
-        </div>
+        <TopbarActions session={session} onNavigate={navigate} onCreateMode={setCreationMode} onLogin={() => navigate('登录')} onLogout={logout} showLogin={!session} />
       </header>
 
       {/* 左侧垂直导航栏 */}
@@ -222,11 +360,14 @@ function App() {
           return (
             <button
               key={label}
-              className={`nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => setActiveTab(label)}
+              className={`nav-item ${isActive ? 'active' : ''} ${label === '剧本' ? 'has-tooltip' : ''}`}
+              onClick={() => navigate(label)}
             >
               <Icon size={22} strokeWidth={isActive ? 2.2 : 1.8} />
               <span>{label}</span>
+              {label === '剧本' && (
+                <span className="nav-tooltip" role="tooltip">上传剧本，切分镜、拆资产、铺卡片</span>
+              )}
             </button>
           );
         })}
@@ -258,7 +399,7 @@ function App() {
                   type="button"
                   className="tool-btn"
                   onClick={() => {
-                    setActiveTab('创作');
+                    navigate('创作');
                     setCreationMode('剧本成片');
                   }}
                 >
@@ -268,7 +409,7 @@ function App() {
                   type="button"
                   className="tool-btn"
                   onClick={() => {
-                    setActiveTab('画布');
+                    navigate('画布');
                   }}
                 >
                   <LayoutGrid size={15} /> 新建画布
@@ -318,7 +459,7 @@ function App() {
             <div
               className="portal-card card-create"
               onClick={() => {
-                setActiveTab('创作');
+                navigate('创作');
               }}
             >
               <div className="portal-info">
@@ -342,7 +483,7 @@ function App() {
             <div
               className="portal-card card-canvas"
               onClick={() => {
-                setActiveTab('画布');
+                navigate('画布');
               }}
             >
               <div className="portal-info">
@@ -368,7 +509,7 @@ function App() {
             <div
               className="portal-card card-assets"
               onClick={() => {
-                setActiveTab('资产');
+                navigate('资产');
               }}
             >
               <div className="portal-info">
@@ -396,7 +537,7 @@ function App() {
             <div
               className="portal-card card-scripts"
               onClick={() => {
-                setActiveTab('剧本');
+                navigate('剧本');
               }}
             >
               <div className="portal-info">
@@ -427,7 +568,7 @@ function App() {
               <button
                 type="button"
                 className="view-all-link"
-                onClick={() => setActiveTab('成片')}
+                onClick={() => navigate('成片')}
               >
                 全部成片 <ChevronRight size={15} />
               </button>
@@ -455,74 +596,40 @@ function App() {
           </section>
         </main>
       ) : activeTab === '创作' ? (
-        /* 原有的创作及子页面 */
-        <main className="main-content">
-          <div className="mode-switch">
-            <button
-              className={creationMode === '剧本成片' ? 'selected' : ''}
-              onClick={() => setCreationMode('剧本成片')}
-            >
-              <Video size={18} />
-              剧本成片
-            </button>
-            <button
-              className={creationMode === '分镜出片' ? 'selected' : ''}
-              onClick={() => setCreationMode('分镜出片')}
-            >
-              <PlaySquare size={19} />
-              分镜出片
-            </button>
-            <button
-              className={creationMode === '无限画布' ? 'selected' : ''}
-              onClick={() => setCreationMode('无限画布')}
-            >
-              <LayoutGrid size={19} />
-              无限画布
-            </button>
-          </div>
-
-          <h1>剧本入，成片出，整部剧一条线做完</h1>
-
-          <section className="upload-card">
-            <div className="doc-icon">
-              <FileText size={25} />
-            </div>
-            <h2>把剧本拖到这里</h2>
-            <p>自动切分镜，拆出人物 / 场景 / 道具，铺好提示词卡片，你逐张确认出片</p>
-            <div className="upload-actions">
-              <button className="primary">
-                <Upload size={17} />
-                上传剧本
-              </button>
-              <button className="secondary">
-                <Clipboard size={17} />
-                粘贴文本
-              </button>
-            </div>
-            <div className="formats">支持 .docx / .txt / .md / .csv，单本不超过 20 万字</div>
-          </section>
-
-          <section className="scripts">
-            <div className="section-heading">
-              <h2>我的剧本</h2>
-              <button>
-                全部剧本 <ChevronRight size={16} />
-              </button>
-            </div>
-            <div className="empty-state">
-              <div className="cloud-mark">⌁</div>
-              <strong>还没有剧本</strong>
-              <p>在上面拖入、上传或粘贴一本，系统会自动切出分镜。</p>
-            </div>
-          </section>
-        </main>
+        <CreateWorkbench mode={creationMode} projectId={selectedProject?.id} projectName={selectedProject?.name} onModeChange={setCreationMode} onOpenScripts={() => navigate('剧本')} />
+      ) : activeTab === '成片' ? (
+        /* 成片：列表 + 详情（卡片可点开详情页） */
+        <VideosPage projectId={selectedProject?.id} onCreate={() => navigate('创作')} />
+      ) : activeTab === '智能体' ? (
+        /* 智能体：左侧技能栏 + 右侧对话工作台 */
+        <AgentsPage />
+      ) : activeTab === '画布' ? (
+        /* 画布：画布列表 + 全屏画布编辑器 */
+        <CanvasPage projectId={selectedProject?.id} />
+      ) : activeTab === '剧本' ? (
+        /* 剧本：剧本库空状态 / 列表 + 上传弹窗 */
+        <ScriptsPage projectId={selectedProject?.id} onOpenShots={() => navigate('画布')} />
+      ) : activeTab === '拆解' ? (
+        /* 拆解：对标视频拆解表单 + 拆解记录 */
+        <DecomposePage projectId={selectedProject?.id} />
+      ) : activeTab === '资产' ? (
+        /* 资产：人物 / 场景 / 道具资产库 */
+        <AssetsPage projectId={selectedProject?.id} />
+      ) : activeTab === '项目' ? (
+        /* 项目：项目列表 + 新建项目弹窗 */
+        <ProjectsPage onOpenProject={openProjectPage} />
+      ) : activeTab === '数据' ? (
+        /* 数据：生产报表 / 抖音账号 */
+        <DataPage />
+      ) : activeTab === '分发' ? (
+        /* 分发：抖音视频 → 小红书草稿（半自动，人工发布） */
+        <DistributePage />
       ) : (
         /* 其他 Tab 的通用展示页，支持一键返回首页或创作 */
         <main className="main-content">
           <div className="tab-placeholder-page">
             <div className="placeholder-card">
               <div className="placeholder-icon-wrap">
-                {activeTab === '成片' && <Video size={36} />}
                 {activeTab === '智能体' && <Bot size={36} />}
                 {activeTab === '画布' && <LayoutGrid size={36} />}
                 {activeTab === '剧本' && <FileText size={36} />}
@@ -534,10 +641,10 @@ function App() {
               <h2>{activeTab}工作台</h2>
               <p className="placeholder-sub">正在为您加载{activeTab}模块相关数据与工具集...</p>
               <div className="placeholder-actions">
-                <button className="primary" onClick={() => setActiveTab('首页')}>
+                <button className="primary" onClick={() => navigate('首页')}>
                   返回首页
                 </button>
-                <button className="secondary" onClick={() => setActiveTab('创作')}>
+                <button className="secondary" onClick={() => navigate('创作')}>
                   进入创作
                 </button>
               </div>
@@ -547,17 +654,33 @@ function App() {
       )}
 
       {/* 左下角调色盘/主题选择器 */}
-      <div className="theme-bar">
-        <button className="palette-btn" title="配色主题">
+      <div className="theme-bar" ref={themeRef}>
+        <button type="button" className="palette-btn" title="配色主题" onClick={() => setThemeOpen(open => !open)}>
           <Palette size={16} />
         </button>
         <div className="theme-dots">
-          <i title="夜幕黑紫" />
-          <i title="极光淡紫" />
-          <i className="chosen" title="新国风雅金" />
-          <i title="青绿山水" />
+          {THEMES.map(item => <i key={item.key} role="button" tabIndex={0} title={item.name}
+            className={theme === item.key ? 'chosen' : ''}
+            style={{ background: item.swatch }}
+            onClick={() => setTheme(item.key)}
+            onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setTheme(item.key);
+              }
+            }} />)}
         </div>
       </div>
+
+      {themeOpen && <div className="theme-menu">
+        <header>配色主题</header>
+        {THEMES.map(item => <button key={item.key} type="button"
+          className={theme === item.key ? 'current' : ''}
+          onClick={() => { setTheme(item.key); setThemeOpen(false); }}>
+          <i style={{ background: item.swatch }} />{item.name}
+          {theme === item.key && <small>当前</small>}
+        </button>)}
+      </div>}
     </div>
   );
 }

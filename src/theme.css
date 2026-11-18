@@ -1,0 +1,975 @@
+/* ============================================================
+   主题系统：4 套配色
+   gold(新国风雅金) / ink(夜幕黑紫) / aurora(极光淡紫) / jade(青绿山水)
+   用法：<html data-theme="ink">
+   ============================================================ */
+
+:root {
+  --page-1: #f2efdf;
+  --page-2: #f7f4ea;
+  --page-3: #f4f0e4;
+  --surface: #fffdf8;
+  --surface-2: #faf7ec;
+  --surface-3: #f2eddb;
+  --surface-glass: rgba(255, 253, 247, 0.94);
+  --line: #e4dbc4;
+  --line-soft: #efe6d0;
+  --line-strong: #d8c89f;
+  --text: #25374a;
+  --text-2: #5f6d7e;
+  --muted: #8a94a4;
+  --accent: #245166;
+  --accent-strong: #2b5d73;
+  --accent-ink: #22465a;
+  --accent-wash: #f1ead3;
+  --accent-border: #e2c77d;
+  --gold: #d5a842;
+  --shadow: rgba(90, 80, 50, 0.1);
+  --topbar: rgba(246, 243, 233, 0.72);
+  --dot: #cfc7b2;
+  --wave-opacity: 0.62;
+}
+
+:root[data-theme="ink"] {
+  --page-1: #1a1722;
+  --page-2: #211d2c;
+  --page-3: #171420;
+  --surface: #241f31;
+  --surface-2: #2b253a;
+  --surface-3: #322b43;
+  --surface-glass: rgba(36, 31, 49, 0.94);
+  --line: #3b3449;
+  --line-soft: #332c41;
+  --line-strong: #4e4360;
+  --text: #f2eefb;
+  --text-2: #c2bad3;
+  --muted: #9a91b4;
+  --accent: #8b6ad4;
+  --accent-strong: #9c7ce6;
+  --accent-ink: #e7dcff;
+  --accent-wash: #332b46;
+  --accent-border: #5d4b80;
+  --gold: #c9a7ff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --topbar: rgba(26, 23, 34, 0.78);
+  --dot: #3d3550;
+  --wave-opacity: 0.26;
+  color-scheme: dark;
+}
+
+:root[data-theme="aurora"] {
+  --page-1: #f2ecfb;
+  --page-2: #f9f6ff;
+  --page-3: #f1ebf9;
+  --surface: #ffffff;
+  --surface-2: #f8f3ff;
+  --surface-3: #f1e9fb;
+  --surface-glass: rgba(255, 255, 255, 0.94);
+  --line: #e6dcf4;
+  --line-soft: #f0e8fa;
+  --line-strong: #d5c4ee;
+  --text: #2f2743;
+  --text-2: #675c7d;
+  --muted: #958aa8;
+  --accent: #6a4fb0;
+  --accent-strong: #7b5fc4;
+  --accent-ink: #4b3685;
+  --accent-wash: #f1e9fb;
+  --accent-border: #c9b6ea;
+  --gold: #b493e8;
+  --shadow: rgba(90, 70, 130, 0.12);
+  --topbar: rgba(246, 240, 255, 0.78);
+  --dot: #d8c9ef;
+  --wave-opacity: 0.4;
+}
+
+:root[data-theme="jade"] {
+  --page-1: #e9f1ea;
+  --page-2: #f3f8f2;
+  --page-3: #eaf2ec;
+  --surface: #fdfefb;
+  --surface-2: #f2f7f1;
+  --surface-3: #e8f0e8;
+  --surface-glass: rgba(253, 254, 251, 0.94);
+  --line: #d9e5d8;
+  --line-soft: #e8f0e7;
+  --line-strong: #c3d6c4;
+  --text: #1f3a35;
+  --text-2: #526b64;
+  --muted: #7f948d;
+  --accent: #2c6353;
+  --accent-strong: #35755f;
+  --accent-ink: #1f4d40;
+  --accent-wash: #e6f0e9;
+  --accent-border: #a9c8b7;
+  --gold: #b1943f;
+  --shadow: rgba(40, 70, 55, 0.12);
+  --topbar: rgba(240, 246, 240, 0.78);
+  --dot: #c6d6c5;
+  --wave-opacity: 0.42;
+}
+
+/* ===== 基础层 ===== */
+body {
+  background: var(--page-1);
+  color: var(--text);
+}
+
+.app-shell {
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--gold) 20%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, var(--page-1) 0%, var(--page-2) 55%, var(--page-3) 100%);
+}
+
+.app-shell::after {
+  opacity: var(--wave-opacity);
+}
+
+.topbar {
+  background: var(--topbar);
+  border-bottom-color: var(--line);
+}
+
+.brand-mark {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.brand strong {
+  color: var(--text);
+}
+
+.brand-sub {
+  color: var(--muted);
+  border-left-color: var(--line-strong);
+}
+
+.pill,
+.round,
+.credit {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.pill:hover,
+.round:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+.credit {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+}
+
+.credit b,
+.profile b {
+  color: var(--text);
+}
+
+.profile small {
+  color: var(--muted);
+}
+
+.avatar {
+  background: var(--accent);
+}
+
+.sidebar {
+  background: var(--surface-glass);
+  border-color: var(--line);
+  box-shadow: 0 8px 30px var(--shadow);
+}
+
+.nav-item {
+  color: var(--text-2);
+}
+
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--accent-wash);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+}
+
+.theme-bar {
+  background: var(--surface-glass);
+  border-color: var(--line);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+.palette-btn {
+  color: var(--text-2);
+}
+
+.palette-btn:hover {
+  color: var(--accent);
+}
+
+/* ===== 卡片 / 面板 ===== */
+.prompt-card,
+.upload-card,
+.portal-card,
+.featured-work-card,
+.placeholder-card,
+.empty-state,
+.mode-switch,
+.tool-btn,
+.sunflower-card,
+.skill-panel,
+.agent-console,
+.skill-card,
+.skill-categories button,
+.composer-box,
+.canvas-new,
+.canvas-card,
+.canvas-topbar,
+.canvas-rail,
+.canvas-node,
+.quick-card,
+.node-menu,
+.canvas-tools,
+.canvas-zoom,
+.prompt-pill,
+.data-bar,
+.data-account,
+.data-help,
+.account-tips,
+.data-actions button,
+.data-custom input,
+.decompose-side,
+.decompose-main,
+.record-item,
+.dc-input,
+.dc-select,
+.upload-btn,
+.start-btn,
+.ghost-btn,
+.file-chip,
+.result-cell,
+.project-card,
+.projects-empty,
+.project-dialog,
+.projects-refresh,
+.projects-fab,
+.stage,
+.stage-btn,
+.projects-ghost,
+.video-card,
+.video-results .video-card,
+.detail-block,
+.side-card,
+.detail-back,
+.detail-ghost,
+.video-card-actions button,
+.page-actions button,
+.search-box,
+.model-select,
+.prompt-block,
+.compose-card,
+.compose-field textarea,
+.compose-chips button,
+.compose-ghost,
+.compose-types,
+.asset-card,
+.script-card,
+.script-row {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.search-box input,
+.model-select select,
+.dc-input,
+.dialog-field input,
+.dialog-field select,
+.compose-field textarea,
+.composer textarea,
+.prompt-textarea,
+.data-custom input {
+  background-color: transparent;
+  color: var(--text);
+}
+
+.dc-input,
+.dialog-field input,
+.dialog-field select,
+.compose-field textarea,
+.data-custom input {
+  background-color: var(--surface);
+}
+
+/* ===== 强调色：主按钮 / 选中态 ===== */
+.primary,
+.detail-primary,
+.compose-primary,
+.dialog-primary,
+.canvas-primary,
+.projects-primary,
+.data-primary,
+.canvas-zap,
+.send-btn:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.primary:hover,
+.detail-primary:hover:not(:disabled),
+.compose-primary:hover:not(:disabled),
+.dialog-primary:hover,
+.canvas-primary:hover,
+.projects-primary:hover:not(:disabled),
+.data-primary:hover,
+.canvas-zap:hover {
+  background: var(--accent-strong);
+}
+
+.nav-item.active svg {
+  color: var(--accent-ink);
+}
+
+.status-tabs button.current,
+.view-switch button.current,
+.tool-icon.on,
+.skill-categories button.chosen,
+.data-ranges button.current,
+.data-bar button.current {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+
+.skill-card.selected,
+.record-item.current,
+.version-row.current {
+  background: var(--accent-wash);
+  border-color: var(--accent-border);
+}
+
+.data-bar button:hover,
+.data-ranges button:hover,
+.stage-btn:hover:not(:disabled),
+.video-card-actions button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+/* ===== 文字层级 ===== */
+.hero-title,
+.guide-title,
+.page-heading h1,
+.canvas-list-head h1,
+.projects-head h1,
+.data-head h1,
+.decompose-main h1,
+.detail-heading h1,
+.console-head h1,
+.canvas-title h1,
+.panel-title,
+.video-card h3,
+.skill-card strong,
+.stage-text strong,
+.project-title h3,
+.account-text strong,
+.data-empty strong,
+.video-empty strong,
+.empty-state strong,
+.placeholder-card h2,
+.compose-card h2,
+.project-dialog h2,
+.canvas-empty h2,
+.canvas-node header strong,
+.result-cell b,
+.task-info b,
+.param b,
+.data-bar-title,
+.data-range-line,
+.work-name,
+.featured-title,
+.section-heading h2 {
+  color: var(--text);
+}
+
+.page-heading p,
+.projects-head p,
+.data-head p,
+.console-head p,
+.video-card-prompt,
+.skill-card span,
+.stage-text p,
+.account-text p,
+.data-empty p,
+.video-empty p,
+.empty-state p,
+.placeholder-sub,
+.prompt-block,
+.canvas-empty p,
+.side-desc,
+.lead,
+.record-meta,
+.project-title p,
+.account-tips,
+.data-help,
+.guide-desc,
+.work-category,
+.param span,
+.data-range-line span:last-child {
+  color: var(--text-2);
+}
+
+.video-card-meta,
+.video-card-time,
+.skill-card small,
+.task-info span,
+.compose-counter,
+.record-row small,
+.data-info {
+  color: var(--muted);
+}
+
+/* ===== 特殊区域 ===== */
+.canvas-stage {
+  background-color: var(--page-2);
+  border-color: var(--line);
+  --rf-edge: var(--line-strong);
+  --rf-dot: var(--dot);
+  --rf-minimap-bg: var(--surface);
+  --rf-minimap-mask: color-mix(in srgb, var(--page-2) 70%, transparent);
+}
+
+/* React Flow 内部配色跟随主题变量 */
+.canvas-stage .react-flow {
+  --xy-edge-stroke: var(--rf-edge);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-connectionline-stroke: var(--accent);
+  --xy-handle-background-color: var(--surface);
+  --xy-handle-border-color: var(--line-strong);
+  --xy-selection-background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  --xy-selection-border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.canvas-stage .node-port-handle.react-flow__handle {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+
+.canvas-stage .node-port-handle.react-flow__handle:hover,
+.canvas-stage .node-port-handle.react-flow__handle.connectingfrom {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 节点里的提示词输入 / 参数 / 产物预览跟随主题 */
+.canvas-stage .node-prompt {
+  background: var(--surface-2);
+  border-color: var(--line-soft);
+  color: var(--text);
+}
+
+.canvas-stage .node-prompt::placeholder {
+  color: var(--muted);
+}
+
+.canvas-stage .node-prompt:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.canvas-stage .node-params select {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.canvas-stage .node-preview {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.canvas-stage .node-preview-empty b { color: var(--text-2); }
+.canvas-stage .node-preview-empty i { color: var(--muted); }
+.canvas-stage .node-progress { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.canvas-stage .node-progress i { background: var(--accent); }
+.canvas-stage .node-run { background: var(--accent); border-color: var(--accent); }
+.canvas-stage .node-run:hover { background: var(--accent-strong); }
+.canvas-stage .node-run.stop { background: transparent; border-color: var(--line); color: var(--text-2); }
+.canvas-stage .node-run.stop:hover { background: var(--surface-2); }
+.canvas-stage .node-run.retry { background: transparent; border-color: var(--accent-border); color: var(--accent-ink); }
+.canvas-stage .node-status { color: var(--muted); }
+.canvas-stage .node-status.done { color: #2f9c6a; }
+.canvas-stage .node-status.failed { color: #d0604c; }
+.canvas-stage .node-status.queued,
+.canvas-stage .node-status.running { color: var(--accent); }
+.canvas-stage .node-task { color: var(--muted); }
+
+/* 模板流程节点与模板画廊跟随主题 */
+.canvas-stage .node-field,
+.canvas-stage .node-input,
+.canvas-stage .field-toggle,
+.canvas-stage .shot-cell,
+.canvas-stage .hitl-row,
+.template-board,
+.template-card,
+.canvas-templates-btn {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.canvas-stage .node-field {
+  background-color: var(--surface-2);
+  color: var(--text);
+}
+
+.canvas-stage .node-input {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+.canvas-stage .shot-cell,
+.canvas-stage .hitl-row {
+  background-color: var(--surface-2);
+}
+
+.canvas-stage .hitl-row.on {
+  border-color: var(--accent-border);
+  background-color: var(--surface-3);
+}
+
+.canvas-stage .node-out-list span,
+.canvas-stage .node-chip {
+  background-color: var(--surface-2);
+  border-color: var(--line-soft);
+  color: var(--text-2);
+}
+
+.canvas-stage .node-chip.ok {
+  background-color: var(--accent-wash);
+  color: var(--accent-ink);
+}
+
+.canvas-stage .field-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.canvas-stage .node-kicker,
+.canvas-stage .node-note { color: var(--muted); }
+.canvas-stage .node-summary { color: var(--text-2); }
+.canvas-stage .node-meta { color: var(--muted); }
+.canvas-stage .node-meta b { color: var(--text-2); }
+.canvas-stage .shot-cell b { color: var(--gold); }
+.canvas-stage .shot-cell i { color: var(--text); }
+.canvas-stage .shot-cell span,
+.canvas-stage .hitl-row i { color: var(--muted); }
+.canvas-stage .hitl-row span { color: var(--text-2); }
+
+.template-mask {
+  background: rgba(12, 16, 24, 0.5);
+}
+
+.template-board { background: var(--surface); border-color: var(--line); }
+.template-board h2 { color: var(--text); }
+.template-board header p { color: var(--text-2); }
+.template-card { background: var(--surface-2); border-color: var(--line); }
+.template-card-top strong { color: var(--text); }
+.template-card p { color: var(--text-2); }
+.template-badge { background: var(--accent); }
+.fig { background: var(--surface); border-color: var(--line-soft); color: var(--text-2); }
+.template-go { color: var(--accent); }
+.canvas-templates-btn { background: var(--surface); color: var(--text-2); border-color: var(--line); }
+.canvas-templates-btn:hover { background: var(--surface-2); }
+.template-close { color: var(--muted); }
+
+.canvas-stage .react-flow__node.selectable.selected .canvas-node {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent), 0 10px 26px var(--shadow);
+}
+
+.canvas-minimap.react-flow__minimap {
+  border-color: var(--line);
+  box-shadow: 0 8px 20px var(--shadow);
+}
+
+/* 点阵网格：矢量点阵在深色主题下更清楚 */
+.react-flow__background circle {
+  fill: var(--rf-dot);
+}
+
+.canvas-empty h2,
+.canvas-quick strong {
+  color: var(--text);
+}
+
+.quick-card span,
+.canvas-hints span {
+  color: var(--text-2);
+}
+
+.canvas-hints span {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.canvas-hints b {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.preview-frame,
+.video-thumb {
+  border-color: var(--line);
+}
+
+.preview-media {
+  background: color-mix(in srgb, var(--page-3) 88%, #000);
+}
+
+.project-cloud,
+.data-cloud,
+.canvas-cloud {
+  filter: saturate(1.05);
+}
+
+.upload-card {
+  background: var(--surface);
+}
+
+.mode-switch {
+  background: color-mix(in srgb, var(--surface-3) 80%, transparent);
+}
+
+.mode-switch button {
+  color: var(--text-2);
+}
+
+.mode-switch button.selected {
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+
+/* 弹窗遮罩在深色主题下更深一点 */
+:root[data-theme="ink"] .project-mask,
+:root[data-theme="ink"] .compose-mask {
+  background: rgba(10, 8, 16, 0.66);
+}
+
+/* ===== 主题选择器 ===== */
+.theme-dots i {
+  transition: transform 0.16s ease, outline-color 0.16s ease;
+}
+
+.theme-dots i:hover {
+  transform: translateY(-1px) scale(1.08);
+}
+
+.theme-dots .chosen {
+  outline-color: var(--accent);
+}
+
+.theme-menu {
+  position: fixed;
+  z-index: 40;
+  left: 20px;
+  bottom: 62px;
+  width: 208px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px var(--shadow);
+}
+
+.theme-menu header {
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.theme-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.theme-menu button.current {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.theme-menu i {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+
+.theme-menu small {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ===== 补充：各页局部文案与控件 ===== */
+.video-search {
+  background-color: var(--surface);
+  border-color: var(--line);
+}
+
+.tag-pill {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.tag-pill:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+.portal-info h3,
+.upload-card h2,
+.section-heading h2,
+.work-name,
+.projects-empty strong,
+.tag-pill,
+.view-all-link,
+.side-desc strong,
+.data-bar-title,
+.data-info,
+.stage-btn,
+.record-row small {
+  color: var(--text);
+}
+
+.portal-info p,
+.upload-card p,
+.formats,
+.work-category,
+.tags-label,
+.view-all-link,
+.projects-empty p,
+.guide-desc,
+.upload-card .formats,
+.record-meta,
+.side-desc,
+.record-row small,
+.stage-btn,
+.data-help li,
+.account-tips li,
+.project-hint {
+  color: var(--text-2);
+}
+
+.empty-state,
+.video-empty {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.data-empty strong,
+.video-empty strong,
+.projects-empty strong {
+  color: var(--text);
+}
+
+/* 首页精选卡片在深色下压暗图片区域，避免过亮 */
+:root[data-theme="ink"] .work-cover-img {
+  filter: brightness(0.82) saturate(0.9);
+}
+
+:root[data-theme="ink"] .portal-visual {
+  opacity: 0.9;
+}
+
+/* ===== 加强：标题与主按钮（压过各页面自带的硬编码色） ===== */
+:root[data-theme] h1,
+:root[data-theme] h2,
+:root[data-theme] h3 {
+  color: var(--text);
+}
+
+:root[data-theme] .primary,
+:root[data-theme] .detail-primary,
+:root[data-theme] .compose-primary,
+:root[data-theme] .dialog-primary,
+:root[data-theme] .canvas-primary,
+:root[data-theme] .projects-primary,
+:root[data-theme] .data-primary,
+:root[data-theme] .send-btn:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+:root[data-theme] .primary:hover,
+:root[data-theme] .detail-primary:hover:not(:disabled),
+:root[data-theme] .compose-primary:hover:not(:disabled),
+:root[data-theme] .dialog-primary:hover,
+:root[data-theme] .canvas-primary:hover,
+:root[data-theme] .projects-primary:hover:not(:disabled),
+:root[data-theme] .data-primary:hover {
+  background: var(--accent-strong);
+}
+
+/* 剧本页顶部横幅（另一套页面用的浅色渐变） */
+.scripts-hero {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border-color: var(--line);
+}
+
+.assets-hero,
+.assets-toolbar,
+.asset-filter {
+  background-color: transparent;
+}
+
+.asset-card,
+.assets-empty {
+  background-color: var(--surface);
+  border-color: var(--line);
+}
+
+/* ===== 资产页（另一会话实现，硬编码了浅色底） ===== */
+.assets-page::before {
+  background: var(--page-1);
+}
+
+.assets-warm-glow {
+  opacity: 0.35;
+}
+
+.asset-search,
+.asset-menu,
+.asset-ghost,
+.asset-modal,
+.asset-field input,
+.asset-field select,
+.asset-upload,
+.chip,
+.asset-modal-close,
+.search-clear {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.asset-empty-panel,
+.asset-module-panel {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-color: var(--line);
+}
+
+.asset-cover,
+.asset-tag,
+.filter-btn {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.filter-btn:hover,
+.asset-menu button:hover,
+.asset-menu button.selected,
+.asset-upload:hover,
+.asset-ghost:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.asset-primary,
+.chip.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.asset-tab {
+  color: var(--text-2);
+}
+
+.asset-tab.active {
+  color: var(--text);
+}
+
+.asset-tab.active::after {
+  background: var(--accent);
+}
+
+/* ===== 剧本页（同上） ===== */
+.scripts-hero .hero-divider {
+  background: var(--line);
+}
+
+.script-row,
+.collection-actions button,
+.script-actions .open-shots,
+.source-chip,
+.script-icon,
+.collection-head .count,
+.empty-actions .secondary,
+.script-modal,
+.field input,
+.field select,
+.modal-close {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.script-row:hover,
+.collection-actions button:hover,
+.script-actions .open-shots:hover,
+.modal-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.dropzone {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+
+.dropzone:hover,
+.dropzone:focus-visible,
+.dropzone.dragging {
+  background: var(--surface-3);
+}
+
+.script-modal-backdrop {
+  background: rgba(12, 10, 18, 0.55);
+}
+
+.script-icon,
+.source-chip,
+.asset-tag,
+.asset-cover {
+  color: var(--text-2);
+}

@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .DS_Store
+preview/
+.edge-assets/
+
+# 后端本地数据与密钥
+server/data/
+server/uploads/
+server/.env
